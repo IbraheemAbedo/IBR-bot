@@ -1,15 +1,18 @@
-# استخدام Node.js 18 (أكثر استقراراً)
-FROM node:18-alpine
+# استخدام Node.js 20 (أحدث وأكثر استقراراً)
+FROM node:20-alpine
 
 # إنشاء مجلد العمل
 WORKDIR /app
 
-# نسخ ملفات المشروع
-COPY package*.json ./
-COPY bot.js ./
+# نسخ ملف package.json أولاً (لتحسين caching)
+COPY package.json package-lock.json* ./
 
-# تثبيت المكتبات
-RUN npm install --production --legacy-peer-deps
+# تثبيت المكتبات مع تحديث npm أولاً
+RUN npm install -g npm@latest && \
+    npm ci --only=production --legacy-peer-deps --no-audit
+
+# نسخ باقي الملفات
+COPY bot.js ./
 
 # منفذ التطبيق
 EXPOSE 3000
