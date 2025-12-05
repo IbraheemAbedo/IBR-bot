@@ -6,7 +6,7 @@ WORKDIR /app
 
 # نسخ ملفات المشروع
 COPY package*.json ./
-COPY server.js ./
+COPY bot.js ./
 
 # تثبيت المكتبات
 RUN npm install --production --legacy-peer-deps
@@ -15,4 +15,4 @@ RUN npm install --production --legacy-peer-deps
 EXPOSE 3000
 
 # تشغيل البوت
-CMD ["node", "server.js"]
+CMD ["node", "bot.js"]
