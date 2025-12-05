@@ -5,7 +5,7 @@ const path = require('path');
 
 // ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️
 // ضع توكن البوت هنا (احصل عليه من @BotFather)
-const botToken = '8198997283:AAG5lczK3gAb95VVaETnBDQkty3b2rduM88';
+const botToken = '8198997283:AAHTgqZRZU9bN0dv0WmAXjHcSP9kTxT00sM';
 // ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️
 
 // ضع رقم حسابك (احصل عليه من @userinfobot)
