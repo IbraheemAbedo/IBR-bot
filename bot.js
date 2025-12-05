@@ -87,10 +87,14 @@ bot.start(async (ctx) => {
   ctx.reply('🎮 أهلاً بك في بوت Minecraft!\n\nاختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
-      [Markup.button.callback('1.21.90', 'ver_1.21.90')],
+      [Markup.button.callback('1.21.50', 'ver_1.21.50')],
+      [Markup.button.callback('1.21.72', 'ver_1.21.72')],
+      [Markup.button.callback('1.21.80', 'ver_1.21.80')],
+      [Markup.button.callback('1.21.84', 'ver_1.21.84')],
       [Markup.button.callback('1.21.93', 'ver_1.21.93')],
       [Markup.button.callback('1.21.100', 'ver_1.21.100')],
-      [Markup.button.callback('1.21.120', 'ver_1.21.120')]
+      [Markup.button.callback('1.21.120', 'ver_1.21.120')],
+      [Markup.button.callback('1.21.123', 'ver_1.21.123')]
     ])
   });
 });
@@ -100,7 +104,7 @@ bot.action(/ver_(.+)/, (ctx) => {
   const version = ctx.match[1];
   const userId = ctx.from.id;
   
-  ctx.answerCbQuery(`✅ تم اختيار ${version}`);
+  ctx.answerCbQuery(`✅ تم اختيار الصدار بنجاح${version}`);
   
   // حفظ الإصدار
   servers[userId] = servers[userId] || {};
@@ -140,7 +144,7 @@ bot.on('text', async (ctx) => {
           ])
         });
       } else {
-        ctx.reply('❌ Port يجب أن يكون رقم!');
+        ctx.reply('(حاول مرة اخرى)❌ Port يجب أن يكون رقم!');
       }
     }
   }
@@ -151,7 +155,7 @@ bot.action('run_bot', async (ctx) => {
   const userId = ctx.from.id;
   
   if (!servers[userId] || !servers[userId].ip) {
-    return ctx.answerCbQuery('❌ أضف السيرفر أولاً!', { show_alert: true });
+    return ctx.answerCbQuery('(حاول مرة اخرى)❌ أضف السيرفر أولاً!', { show_alert: true });
   }
   
   const { ip, port, version } = servers[userId];
@@ -177,17 +181,17 @@ bot.action('run_bot', async (ctx) => {
     });
     
     client.on('disconnect', (reason) => {
-      bot.telegram.sendMessage(userId, `❌ تم الفصل: ${reason}`).catch(() => {});
+      bot.telegram.sendMessage(userId, `(حاول مرة اخرى)❌ تم الفصل: ${reason}`).catch(() => {});
       delete clients[userId];
     });
     
     client.on('error', (err) => {
-      bot.telegram.sendMessage(userId, `❌ خطأ: ${err.message}`).catch(() => {});
+      bot.telegram.sendMessage(userId, `(حاول مرة اخرى)❌ خطأ: ${err.message}`).catch(() => {});
       delete clients[userId];
     });
     
   } catch (error) {
-    ctx.reply(`❌ خطأ: ${error.message}`);
+    ctx.reply(`(حاول مرة اخرى)❌ خطأ: ${error.message}`);
   }
 });
 
@@ -196,7 +200,7 @@ bot.action('add_bot', async (ctx) => {
   const userId = ctx.from.id;
   
   if (!servers[userId] || !servers[userId].ip) {
-    return ctx.answerCbQuery('❌ أضف السيرفر أولاً!', { show_alert: true });
+    return ctx.answerCbQuery('(حاول مرة اخرى)❌ أضف السيرفر أولاً!', { show_alert: true });
   }
   
   const { ip, port, version } = servers[userId];
@@ -229,7 +233,7 @@ bot.action('add_bot', async (ctx) => {
     });
     
   } catch (error) {
-    ctx.reply(`❌ فشل إضافة البوت: ${error.message}`);
+    ctx.reply(`(حاول مرة اخرى)❌ فشل إضافة البوت: ${error.message}`);
   }
 });
 
@@ -249,7 +253,7 @@ bot.action('stop_bot', (ctx) => {
     }
   }
   
-  ctx.answerCbQuery(`🛑 تم إيقاف ${stopped} بوت`);
+  ctx.answerCbQuery(`🛑 تم إيقاف البوت بنجاح${stopped} بوت`);
   ctx.reply(`✅ تم إيقاف ${stopped} بوت`);
 });
 
