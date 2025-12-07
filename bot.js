@@ -3,13 +3,14 @@ const { createClient } = require('bedrock-protocol');
 const fs = require('fs');
 const path = require('path');
 
-// ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️
-// ضع توكن البوت هنا (احصل عليه من @BotFather)
-const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';
-// ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️
+// قناة الاشتراك الإجباري
+const REQUIRED_CHANNEL = '@IBR_Channel';
 
-// ضع رقم حسابك (احصل عليه من @userinfobot)
-const ownerId = 1421302016; // غير هذا الرقم
+// ⚠️ ضع توكن البوت
+const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';
+
+// ⚠️ ضع رقم حسابك
+const ownerId = 1421302016;
 
 const bot = new Telegraf(botToken);
 
@@ -58,11 +59,38 @@ function saveUsers() {
   } catch (error) {}
 }
 
+// فحص الاشتراك في القناة
+async function checkSubscription(ctx) {
+  try {
+    const member = await ctx.telegram.getChatMember(REQUIRED_CHANNEL, ctx.from.id);
+    if (['member', 'creator', 'administrator'].includes(member.status)) {
+      return true;
+    }
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
 // تحميل عند البدء
 loadData();
 
 // البداية
 bot.start(async (ctx) => {
+  const isSub = await checkSubscription(ctx);
+
+  if (!isSub) {
+    return ctx.reply(
+      `  🔒 للوصول إلى البوت يجب الاشتراك في القناة:\n${REQUIRED_CHANNEL}\n بعد الاشتراك اضغط على /start`,
+      {
+        ...Markup.inlineKeyboard([
+          [Markup.button.url('📌 اشترك الآن', 'https://t.me/IBR_Channel')],
+          [Markup.button.callback('🔍 تحقق من الاشتراك', 'check_sub')]
+        ])
+      }
+    );
+  }
+
   const user = ctx.from;
   const userId = user.id;
   
@@ -84,7 +112,7 @@ bot.start(async (ctx) => {
   }
   
   // عرض قائمة الإصدارات
-  ctx.reply('🎮 أهلاً بك في بوت Minecraft!\n\nاختر إصدار اللعبة:', {
+  ctx.reply('🎮 أهلاً بك في بوت Minecraft bu IBR!\n\nاختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('1.21.50', 'ver_1.21.50')],
@@ -95,8 +123,21 @@ bot.start(async (ctx) => {
       [Markup.button.callback('1.21.100', 'ver_1.21.100')],
       [Markup.button.callback('1.21.120', 'ver_1.21.120')],
       [Markup.button.callback('1.21.123', 'ver_1.21.123')]
+      
     ])
   });
+});
+
+// زر التحقق من الاشتراك
+bot.action('check_sub', async (ctx) => {
+  const isSub = await checkSubscription(ctx);
+
+  if (!isSub) {
+    return ctx.answerCbQuery('❌ لم تشترك بعد!', { show_alert: true });
+  }
+
+  ctx.answerCbQuery('✅ تم التحقق بنجاح!', { show_alert: true });
+  bot.start(ctx); // إعادة تشغيل البداية
 });
 
 // اختيار الإصدار
@@ -104,15 +145,13 @@ bot.action(/ver_(.+)/, (ctx) => {
   const version = ctx.match[1];
   const userId = ctx.from.id;
   
-  ctx.answerCbQuery(`✅ تم اختيار الصدار بنجاح${version}`);
+  ctx.answerCbQuery(`✅ تم اختيار الاصدار ${version}`);
   
-  // حفظ الإصدار
   servers[userId] = servers[userId] || {};
   servers[userId].version = version;
   saveServers();
   
-  // طلب بيانات السيرفر
-  ctx.reply(`✅ الإصدار: ${version}\n\n📥 أرسل IP السيرفر وPort:\nمثال:\nplay.server.com:19132\n\nأو:\nlocalhost:19132`);
+  ctx.reply(`✅ الإصدار: ${version}\n\n📥 أرسل IP السيرفر وPort:\nمثال:\nplay.server.com:19132`);
 });
 
 // استقبال IP وPort
@@ -120,7 +159,6 @@ bot.on('text', async (ctx) => {
   const text = ctx.message.text;
   const userId = ctx.from.id;
   
-  // إذا كان النص يحتوي على : فهو IP:Port
   if (text.includes(':')) {
     const parts = text.split(':');
     if (parts.length === 2) {
@@ -128,23 +166,24 @@ bot.on('text', async (ctx) => {
       const port = parseInt(parts[1].trim());
       
       if (!isNaN(port)) {
-        // حفظ السيرفر
         servers[userId] = servers[userId] || {};
         servers[userId].ip = ip;
         servers[userId].port = port;
         saveServers();
         
-        // عرض لوحة التحكم
-        ctx.reply(`✅ تم حفظ السيرفر!\n\n🌐 IP: ${ip}\n🔌 Port: ${port}\n\nاختر الإجراء:`, {
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('▶️ تشغيل البوت', 'run_bot')],
-            [Markup.button.callback('➕ إضافة بوت', 'add_bot')],
-            [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
-            [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')]
-          ])
-        });
+        ctx.reply(
+          `✅ تم حفظ السيرفر!\n🌐 IP: ${ip}\n🔌 Port: ${port}`,
+          {
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('▶️ تشغيل البوت', 'run_bot')],
+              [Markup.button.callback('➕ إضافة بوت', 'add_bot')],
+              [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
+              [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')]
+            ])
+          }
+        );
       } else {
-        ctx.reply('(حاول مرة اخرى)❌ Port يجب أن يكون رقم!');
+        ctx.reply('❌ Port يجب أن يكون رقم!');
       }
     }
   }
@@ -155,16 +194,15 @@ bot.action('run_bot', async (ctx) => {
   const userId = ctx.from.id;
   
   if (!servers[userId] || !servers[userId].ip) {
-    return ctx.answerCbQuery('(حاول مرة اخرى)❌ أضف السيرفر أولاً!', { show_alert: true });
+    return ctx.answerCbQuery('❌ أضف السيرفر أولاً!', { show_alert: true });
   }
   
   const { ip, port, version } = servers[userId];
   
   ctx.answerCbQuery('🚀 جاري التشغيل...');
-  ctx.reply(`🔗 جاري الاتصال بـ:\n${ip}:${port}`);
+  ctx.reply(`🔗 الاتصال بـ:\n${ip}:${port}`);
   
   try {
-    // إنشاء البوت الأول
     const client = createClient({
       host: ip,
       port: port,
@@ -177,21 +215,21 @@ bot.action('run_bot', async (ctx) => {
     clients[userId] = client;
     
     client.on('join', () => {
-      bot.telegram.sendMessage(userId, ' استمتع يا صديقي 🔥✅ البوت دخل السيرفر بنجاح!').catch(() => {});
+      bot.telegram.sendMessage(userId, '🔥 دخل البوت بنجاح!').catch(() => {});
     });
     
     client.on('disconnect', (reason) => {
-      bot.telegram.sendMessage(userId, `(حاول مرة اخرى)❌ تم الفصل: ${reason}`).catch(() => {});
+      bot.telegram.sendMessage(userId, `❌ تم الفصل: ${reason}`).catch(() => {});
       delete clients[userId];
     });
     
     client.on('error', (err) => {
-      bot.telegram.sendMessage(userId, `(حاول مرة اخرى)❌ خطأ: ${err.message}`).catch(() => {});
+      bot.telegram.sendMessage(userId, `❌ خطأ: ${err.message}`).catch(() => {});
       delete clients[userId];
     });
     
   } catch (error) {
-    ctx.reply(`(حاول مرة اخرى)❌ خطأ: ${error.message}`);
+    ctx.reply(`❌ خطأ: ${error.message}`);
   }
 });
 
@@ -200,15 +238,15 @@ bot.action('add_bot', async (ctx) => {
   const userId = ctx.from.id;
   
   if (!servers[userId] || !servers[userId].ip) {
-    return ctx.answerCbQuery('(حاول مرة اخرى)❌ أضف السيرفر أولاً!', { show_alert: true });
+    return ctx.answerCbQuery('❌ أضف السيرفر أولاً!', { show_alert: true });
   }
   
   const { ip, port, version } = servers[userId];
   
-  ctx.answerCbQuery('➕ جاري إضافة بوت...');
+  ctx.answerCbQuery('➕ إضافة بوت...');
   
   try {
-    const botNames = ['Bot_2', 'Bot_3', 'Bot_4', 'Bot_5'];
+    const botNames = ['IBR_Bot_2', 'IBR_Bot_3', 'IBR_Bot_4', 'IBR_Bot_5'];
     const botName = botNames[Math.floor(Math.random() * botNames.length)];
     
     const client = createClient({
@@ -224,24 +262,23 @@ bot.action('add_bot', async (ctx) => {
     clients[clientKey] = client;
     
     client.on('join', () => {
-      bot.telegram.sendMessage(userId, `✅ ${botName} دخل السيرفر`).catch(() => {});
+      bot.telegram.sendMessage(userId, `✅ ${botName} دخل`).catch(() => {});
     });
     
-    client.on('disconnect', (reason) => {
+    client.on('disconnect', () => {
       bot.telegram.sendMessage(userId, `❌ ${botName} تم فصله`).catch(() => {});
       delete clients[clientKey];
     });
     
   } catch (error) {
-    ctx.reply(`(حاول مرة اخرى)❌ فشل إضافة البوت: ${error.message}`);
+    ctx.reply(`❌ فشل إضافة البوت: ${error.message}`);
   }
 });
 
-// إيقاف البوت
+// إيقاف البوتات
 bot.action('stop_bot', (ctx) => {
   const userId = ctx.from.id;
   
-  // إيقاف جميع بوتات المستخدم
   let stopped = 0;
   for (let key in clients) {
     if (key === userId.toString() || key.startsWith(userId + '_')) {
@@ -253,7 +290,7 @@ bot.action('stop_bot', (ctx) => {
     }
   }
   
-  ctx.answerCbQuery(`🛑 تم إيقاف البوت بنجاح${stopped} بوت`);
+  ctx.answerCbQuery(`🛑 تم إيقاف ${stopped} بوت`);
   ctx.reply(`✅ تم إيقاف ${stopped} بوت`);
 });
 
@@ -265,7 +302,6 @@ bot.action('del_server', (ctx) => {
     delete servers[userId];
     saveServers();
     
-    // إيقاف البوتات
     for (let key in clients) {
       if (key === userId.toString() || key.startsWith(userId + '_')) {
         try {
@@ -282,7 +318,7 @@ bot.action('del_server', (ctx) => {
   }
 });
 
-// أمر stats للمالك
+// إحصائيات
 bot.command('stats', (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
@@ -294,14 +330,14 @@ bot.command('stats', (ctx) => {
   ctx.reply(stats);
 });
 
-// أمر broadcast للمالك
+// بث
 bot.command('broadcast', async (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
   const message = ctx.message.text.replace('/broadcast ', '');
-  if (!message) return ctx.reply('❌ أرسل الرسالة مع الأمر');
+  if (!message) return ctx.reply('❌ أرسل الرسالة بعد الأمر');
   
-  ctx.reply(`📢 جاري الإرسال لـ ${users.length} مستخدم...`);
+  ctx.reply(`📢 إرسال الرسالة لـ ${users.length} مستخدم...`);
   
   let sent = 0;
   for (let user of users) {
@@ -323,14 +359,12 @@ bot.catch((err) => {
 console.log('🚀 جاري تشغيل البوت...');
 bot.launch()
   .then(() => {
-    console.log('✅ البوت يعمل بنجاح!');
-    console.log('📱 افتح تليجرام وابحث عن بوتك');
+    console.log('✅ البوت يعمل الآن!');
   })
   .catch((err) => {
-    console.error('❌ فشل تشغيل البوت:', err);
-    console.log('🔧 تحقق من التوكن وإعادة المحاولة');
+    console.error('❌ خطأ في تشغيل البوت:', err);
   });
 
-// إغلاق أنيق
+// إغلاق آمن
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
