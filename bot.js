@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // قناة الاشتراك الإجباري
-const REQUIRED_CHANNEL = -3499194538;
+const REQUIRED_CHANNEL = -1003499194538;
 
 
 // ⚠️ ضع توكن البوت
