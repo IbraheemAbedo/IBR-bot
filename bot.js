@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 // قناة الاشتراك الإجباري
-const REQUIRED_CHANNEL = '@IBR_Channel';
+const REQUIRED_CHANNEL = -3499194538;
+
 
 // ⚠️ ضع توكن البوت
 const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';
@@ -60,17 +61,20 @@ function saveUsers() {
 }
 
 // فحص الاشتراك في القناة
-async function checkSubscription(ctx) {
+aasync function checkSubscription(ctx) {
   try {
     const member = await ctx.telegram.getChatMember(REQUIRED_CHANNEL, ctx.from.id);
-    if (['member', 'creator', 'administrator'].includes(member.status)) {
+
+    if (member && ['member', 'creator', 'administrator'].includes(member.status)) {
       return true;
     }
+
     return false;
   } catch (err) {
     return false;
   }
 }
+
 
 // تحميل عند البدء
 loadData();
