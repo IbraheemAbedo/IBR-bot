@@ -84,7 +84,7 @@ bot.start(async (ctx) => {
       `  🔒 للوصول إلى البوت يجب الاشتراك في القناة:\n${REQUIRED_CHANNEL}\n بعد الاشتراك اضغط على /start`,
       {
         ...Markup.inlineKeyboard([
-          [Markup.button.url('📌 اشترك الآن', 'https://t.me/IBR_Channel')],
+          [Markup.button.url('📌 اشترك الآن', 'https://t.me/+c7sbwOViyhNmYzAy')],
           [Markup.button.callback('🔍 تحقق من الاشتراك', 'check_sub')]
         ])
       }
