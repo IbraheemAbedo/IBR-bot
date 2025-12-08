@@ -61,7 +61,7 @@ function saveUsers() {
 }
 
 // فحص الاشتراك في القناة
-aasync function checkSubscription(ctx) {
+async function checkSubscription(ctx) {
   try {
     const member = await ctx.telegram.getChatMember(REQUIRED_CHANNEL, ctx.from.id);
 
@@ -74,6 +74,7 @@ aasync function checkSubscription(ctx) {
     return false;
   }
 }
+
 
 
 // تحميل عند البدء
