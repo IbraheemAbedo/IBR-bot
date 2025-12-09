@@ -128,8 +128,8 @@ bot.start(async (ctx) => {
       [Markup.button.callback('1.21.100', 'ver_1.21.100')],
       [Markup.button.callback('1.21.120', 'ver_1.21.120')],
       [Markup.button.callback('1.21.123', 'ver_1.21.123')],
-      [Markup.button.callback('1.21.123', 'ver_1.21.124')],
-      [Markup.button.callback('1.21.123', 'ver_1.21.124.2')]
+      [Markup.button.callback('1.21.124', 'ver_1.21.124')],
+      [Markup.button.callback('1.21.124.2', 'ver_1.21.124.2')]
     ])
   });
 });
