@@ -1,4 +1,4 @@
-const { Telegraf, Markup } = require('telegraf');
+Markup } = require('telegraf');
 const { createClient } = require('bedrock-protocol');
 const fs = require('fs');
 const path = require('path');
@@ -194,19 +194,6 @@ bot.on('text', async (ctx) => {
       }
     }
   }
-  
-  // معالجة رسائل البث (خاصة بالمالك فقط)
-  if (ctx.from.id === ownerId) {
-    // إذا كان المستخدم يرد على رسالة بث سابقة
-    if (ctx.message.reply_to_message) {
-      const repliedMsg = ctx.message.reply_to_message;
-      if (repliedMsg.text && repliedMsg.text.includes('📤 أرسل الرسالة الآن:')) {
-        const broadcastMessage = ctx.message.text;
-        await handleBroadcast(ctx, broadcastMessage);
-        return;
-      }
-    }
-  }
 });
 
 // تشغيل البوت
@@ -350,92 +337,7 @@ bot.command('stats', (ctx) => {
   ctx.reply(stats);
 });
 
-// الأمر الخاص بك /bodcast (بدلاً من /broadcast)
-bot.command('bodcast', async (ctx) => {
-  if (ctx.from.id !== ownerId) return;
-  
-  const message = ctx.message.text.replace('/bodcast ', '').replace('/bodcast', '');
-  
-  if (!message.trim()) {
-    // إذا لم تكن هناك رسالة، طلب إدخال الرسالة
-    return ctx.reply('📤 أرسل الرسالة الآن:\n(يمكنك إرسال نص، صورة، فيديو، أو أي وسائط)', {
-      reply_markup: {
-        force_reply: true,
-        selective: true
-      }
-    });
-  }
-  
-  // إذا كانت هناك رسالة مع الأمر مباشرة
-  await handleBroadcast(ctx, message);
-});
-
-// دالة معالجة البث
-async function handleBroadcast(ctx, message) {
-  if (ctx.from.id !== ownerId) return;
-  
-  if (!message || message.trim() === '') {
-    return ctx.reply('❌ الرسالة فارغة!');
-  }
-  
-  const totalUsers = users.length;
-  if (totalUsers === 0) {
-    return ctx.reply('❌ لا يوجد مستخدمين حتى الآن!');
-  }
-  
-  await ctx.reply(`📢 جاري إرسال الرسالة لـ ${totalUsers} مستخدم...\n\nالرسالة:\n${message}\n\n⏳ قد يستغرق ذلك بعض الوقت...`);
-  
-  let sent = 0;
-  let failed = 0;
-  const startTime = Date.now();
-  
-  for (let i = 0; i < users.length; i++) {
-    const userId = users[i];
-    
-    try {
-      await bot.telegram.sendMessage(userId, `📢 إشعار من الإدارة:\n\n${message}`);
-      sent++;
-      
-      // إرسال تحديث كل 50 مستخدم
-      if (sent % 50 === 0) {
-        await ctx.reply(`📤 تم إرسال ${sent}/${totalUsers} حتى الآن...`);
-      }
-      
-      // تأخير بسيط لتجنب حظر تيليجرام
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-    } catch (err) {
-      failed++;
-      
-      // إذا كان المستخدم حظر البوت، إزالته من القائمة
-      if (err.code === 403 || err.description === 'Forbidden: bot was blocked by the user') {
-        users.splice(i, 1);
-        i--;
-        saveUsers();
-      }
-    }
-  }
-  
-  const endTime = Date.now();
-  const duration = Math.round((endTime - startTime) / 1000);
-  
-  const report = `✅ تم الانتهاء من البث:\n\n📊 النتائج:\n✅ تم الإرسال بنجاح: ${sent}\n❌ فشل الإرسال: ${failed}\n👥 العدد الإجمالي: ${totalUsers}\n⏱️ المدة: ${duration} ثانية`;
-  
-  await ctx.reply(report);
-  
-  // تحديث الإحصائيات للمالك
-  try {
-    await bot.telegram.sendMessage(ownerId, 
-      `📢 تقرير البث الأخير:\n` +
-      `تاريخ: ${new Date().toLocaleString()}\n` +
-      `المستخدمين: ${totalUsers}\n` +
-      `تم الإرسال: ${sent}\n` +
-      `فشل: ${failed}`
-    );
-  } catch (err) {}
-}
-
-// بث (النسخة القديمة - للحفاظ على التوافق)
+// بث
 bot.command('broadcast', async (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
@@ -465,8 +367,6 @@ console.log('🚀 جاري تشغيل البوت...');
 bot.launch()
   .then(() => {
     console.log('✅ البوت يعمل الآن!');
-    console.log(`👑 المالك: ${ownerId}`);
-    console.log(`👥 عدد المستخدمين المحملين: ${users.length}`);
   })
   .catch((err) => {
     console.error('❌ خطأ في تشغيل البوت:', err);
