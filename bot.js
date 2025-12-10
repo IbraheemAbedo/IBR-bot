@@ -1,4 +1,4 @@
-Markup } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const { createClient } = require('bedrock-protocol');
 const fs = require('fs');
 const path = require('path');
