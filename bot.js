@@ -130,7 +130,7 @@ bot.start(async (ctx) => {
       [Markup.button.callback('1.21.123', 'ver_1.21.123')],
       [Markup.button.callback('1.21.124', 'ver_1.21.124')],
       [Markup.button.callback('1.21.124.2', 'ver_1.21.124.2')],
-      [Markup.button.callback('1.21.130', 'ver_1.21.130')]
+      
     ])
   });
 });
