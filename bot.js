@@ -1,5 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
-const { createClient } = require('bedrock-protocol');
+const { createClient } = require('prismarine-bedrock-protocol');
 const fs = require('fs');
 const path = require('path');
 
