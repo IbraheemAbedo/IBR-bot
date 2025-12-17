@@ -40,6 +40,28 @@ const PROTOCOL_MAP = {
   '1.19.40': 557, '1.19.30': 554, '1.19.21': 545,
   '1.19.20': 544, '1.19.10': 534, '1.19.1': 527
 };
+function normalizeVersion(requestedVersion) {
+  // أي إصدار غير مدعوم → نزوّره إلى 1.21.124
+  if (!PROTOCOL_MAP[requestedVersion]) {
+    return {
+      fakeVersion: '1.21.124',
+      protocol: PROTOCOL_MAP['1.21.130'] || 870
+    };
+  }
+
+  // 1.21.130 تحديدًا
+  if (requestedVersion === '1.21.130') {
+    return {
+      fakeVersion: '1.21.124',
+      protocol: 870
+    };
+  }
+
+  return {
+    fakeVersion: requestedVersion,
+    protocol: PROTOCOL_MAP[requestedVersion]
+  };
+}
 
 // دالة للحصول على أقرب إصدار مدعوم
 function getClosestVersion(requestedVersion) {
@@ -149,88 +171,68 @@ async function gracefulShutdown(signal) {
 
 // ============== [الاتصال الذكي] ==============
 async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_Bot') {
-  const versionsToTry = [];
-  const closestVersion = getClosestVersion(requestedVersion);
-  
-  // إضافة الإصدارات للمحاولة
-  if (requestedVersion !== closestVersion) {
-    versionsToTry.push(closestVersion);
-  }
-  versionsToTry.push(requestedVersion);
-  
-  // إضافة إصدارات شائعة أخرى
-  const commonVersions = ['1.21.124', '1.21.120', '1.21.100', '1.21.80', '1.20.80'];
-  commonVersions.forEach(v => {
-    if (!versionsToTry.includes(v)) versionsToTry.push(v);
-  });
-  
-  let lastError = null;
-  
-  for (const version of versionsToTry) {
-    const protocol = PROTOCOL_MAP[version];
-    if (!protocol) continue;
-    
-    try {
-      console.log(`🔗 محاولة ${version} (بروتوكول: ${protocol})`);
-      
-      const client = createClient({
-        host: ip,
-        port: port,
-        username: botName,
-        version: version,
-        offline: true,
-        connectTimeout: 15000,
-        protocolVersion: protocol,
-        skipPing: true,
-        raknetBackoff: false
+  const { fakeVersion, protocol } = normalizeVersion(requestedVersion);
+
+  try {
+    console.log(`🧠 SmartConnect`);
+    console.log(`طلب المستخدم: ${requestedVersion}`);
+    console.log(`تزوير الإصدار إلى: ${fakeVersion}`);
+    console.log(`البروتوكول المستخدم: ${protocol}`);
+
+    const client = createClient({
+      host: ip,
+      port: port,
+      username: botName,
+      version: fakeVersion,          // ⬅️ المزور
+      protocolVersion: protocol,     // ⬅️ الحقيقي
+      offline: true,
+      skipPing: true,
+      connectTimeout: 20000,
+      raknetBackoff: false
+    });
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('انتهت مهلة الاتصال'));
+      }, 20000);
+
+      client.once('join', () => {
+        clearTimeout(timeout);
+        resolve();
       });
-      
-      // انتظار الاتصال
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('انتهت مهلة الاتصال'));
-        }, 15000);
-        
-        client.once('join', () => {
-          clearTimeout(timeout);
-          resolve(client);
-        });
-        
-        client.once('error', (err) => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-        
-        client.once('disconnect', (reason) => {
-          clearTimeout(timeout);
-          reject(new Error(`انقطع الاتصال: ${reason}`));
-        });
+
+      client.once('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
       });
-      
-      return {
-        success: true,
-        client,
-        versionUsed: version,
-        protocolUsed: protocol,
-        requestedVersion,
-        message: version === requestedVersion ? 
-          `✅ تم الاتصال بالإصدار ${version}` :
-          `✅ تم الاتصال بالإصدار ${version} (بديل عن ${requestedVersion})`
-      };
-      
-    } catch (error) {
-      lastError = error;
-      console.log(`❌ فشل ${version}: ${error.message}`);
-      continue;
-    }
+
+      client.once('disconnect', (reason) => {
+        clearTimeout(timeout);
+        reject(new Error(reason));
+      });
+    });
+
+    return {
+      success: true,
+      client,
+      requestedVersion,
+      fakeVersion,
+      protocol,
+      message:
+        `✅ تم الاتصال بنجاح\n` +
+        `📀 الإصدار المطلوب: ${requestedVersion}\n` +
+        `🎭 الإصدار المستخدم: ${fakeVersion}\n` +
+        `🔗 البروتوكول: ${protocol}`
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || 'فشل الاتصال'
+    };
   }
-  
-  return {
-    success: false,
-    error: lastError?.message || 'فشل جميع المحاولات',
-    requestedVersion
-  };
 }
+
 
 // ============== [تحميل البيانات] ==============
 loadData();
@@ -444,59 +446,38 @@ bot.action('run_smart', async (ctx) => {
 // تشغيل البوت العادي
 bot.action('run_bot', async (ctx) => {
   const userId = ctx.from.id;
-  
-  if (!servers[userId] || !servers[userId].ip) {
-    return ctx.answerCbQuery('❌ أضف السيرفر أولاً!', { show_alert: true });
+
+  if (!servers[userId]) {
+    return ctx.answerCbQuery('❌ أضف السيرفر أولاً', { show_alert: true });
   }
-  
-  const { ip, port, version = '1.21.124' } = servers[userId];
-  const protocol = PROTOCOL_MAP[version] || 860;
-  
+
+  const { ip, port, version = '1.21.130' } = servers[userId];
+
   ctx.answerCbQuery('🚀 جاري التشغيل...');
-  ctx.reply(`🔗 الاتصال بـ:\n${ip}:${port}\nالإصدار: ${version}`);
-  
-  try {
-    const client = createClient({
-      host: ip,
-      port: port,
-      username: 'IBR_Bot',
-      version: version,
-      offline: true,
-      connectTimeout: 15000,
-      protocolVersion: protocol,
-      skipPing: true
-    });
-    
-    const clientKey = `${userId}_main`;
-    clients[clientKey] = client;
-    
-    client.on('join', () => {
-      bot.telegram.sendMessage(userId, '🔥 دخل البوت بنجاح!').catch(() => {});
-    });
-    
-    client.on('disconnect', (reason) => {
-      bot.telegram.sendMessage(userId, `❌ تم الفصل: ${reason}`).catch(() => {});
-      delete clients[clientKey];
-    });
-    
-    client.on('error', (err) => {
-      let errorMsg = `❌ خطأ: ${err.message}`;
-      
-      if (err.message.includes('Unsupported version')) {
-        const closest = getClosestVersion(version);
-        errorMsg += `\n\n💡 جرب:\n`;
-        errorMsg += `• الزر "🔧 تشغيل ذكي"\n`;
-        errorMsg += `• أو الإصدار ${closest}`;
-      }
-      
-      bot.telegram.sendMessage(userId, errorMsg).catch(() => {});
-      delete clients[clientKey];
-    });
-    
-  } catch (error) {
-    ctx.reply(`❌ خطأ: ${error.message}`);
+  ctx.reply(`🔗 ${ip}:${port}\n📀 الإصدار: ${version}`);
+
+  const result = await smartConnect(ip, port, version, userId);
+
+  if (!result.success) {
+    return ctx.reply(`❌ فشل الاتصال:\n${result.error}`);
   }
+
+  const key = `${userId}_main`;
+  clients[key] = result.client;
+
+  ctx.reply(result.message);
+
+  result.client.on('disconnect', (r) => {
+    bot.telegram.sendMessage(userId, `❌ تم الفصل: ${r}`).catch(() => {});
+    delete clients[key];
+  });
+
+  result.client.on('error', (e) => {
+    bot.telegram.sendMessage(userId, `⚠️ خطأ: ${e.message}`).catch(() => {});
+    delete clients[key];
+  });
 });
+
 
 // إضافة بوت إضافي
 bot.action('add_bot', async (ctx) => {
