@@ -8,7 +8,7 @@ const REQUIRED_CHANNEL = -1003499194538;
 
 
 // ⚠️ ضع توكن البوت
-const botToken = '8270739982:AAFbleW6nlVqyxJMFxu_8c_ni34mzNIev_w';
+const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';
 
 // ⚠️ ضع رقم حسابك
 const ownerId = 1421302016;
