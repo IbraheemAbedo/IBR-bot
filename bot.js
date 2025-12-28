@@ -379,7 +379,7 @@ bot.on('text', async (ctx) => {
             [Markup.button.callback('➕ إضافة بوت', 'add_bot')],
             [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
             [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')],
-            [Markup.button.url('تفاعل في قناة البوت والا يتم حظرك', 'https://t.me/+c7sbwOViyhNmYzAy')]
+            [Markup.button.url('تفاعل في قناة البوت والا يتم حظرك من استخدام البوت نهائيا🚫 ', 'https://t.me/+c7sbwOViyhNmYzAy')]
             
           ])
         );
@@ -473,7 +473,8 @@ bot.action('run_bot', async (ctx) => {
     clients[clientKey] = client;
     
     client.on('join', () => {
-      bot.telegram.sendMessage(userId, '🔥 دخل البوت بنجاح! تفاعل في قناة البوت والا يتم حظرك').catch(() => {});
+      bot.telegram.sendMessage(userId, '🔥 دخل البوت بنجاح!').catch(() => {});
+      bot.telegram.sendMessage(userId, 'تفاعل في قناة البوت والا يتم حظرك من استخدام البوت نهائيا🚫!').catch(() => {});
     });
     
     client.on('disconnect', (reason) => {
