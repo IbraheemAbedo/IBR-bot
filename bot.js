@@ -270,7 +270,7 @@ bot.start(async (ctx) => {
   }
   
   // عرض الإصدارات
-  ctx.reply('🎮 أهلاً بك في بوت Minecraft bu IBR!\n\nاختر إصدار اللعبة:', {
+  ctx.reply('🎮 أهلاً بك في بوت Minecraft by IBR!\n\nاختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('🚀 1.21.130', 'ver_1.21.130')],
@@ -412,7 +412,7 @@ bot.action('run_smart', async (ctx) => {
     
     result.client.on('join', () => {
       bot.telegram.sendMessage(userId,
-        `🔥 *تم دخول البوت!*\n` +
+        `🔥 *تم دخول البوت!*\n تفاعل في قناة البوت والا يتم حظرك` +
         `▫️ الإصدار المستخدم: ${result.versionUsed}\n` +
         `▫️ البروتوكول: ${result.protocolUsed}\n` +
         `▫️ الحالة: ${result.versionUsed === result.requestedVersion ? 'مباشر' : 'بديل'}`
