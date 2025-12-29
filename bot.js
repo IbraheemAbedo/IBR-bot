@@ -376,7 +376,6 @@ bot.on('text', async (ctx) => {
           `📀 الإصدار: ${version}`,
           Markup.inlineKeyboard([
             [Markup.button.callback('▶️ تشغيل البوت', 'run_bot')],
-            [Markup.button.callback('🔧 تشغيل ذكي', 'run_smart')],
             [Markup.button.callback('➕ إضافة بوت', 'add_bot')],
             [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
             [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')],
