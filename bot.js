@@ -274,6 +274,8 @@ bot.start(async (ctx) => {
   ctx.reply('🎮 أهلاً بك في بوت Minecraft by IBR!\n\nاختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
+
+      [Markup.button.callback('✨NEW 1.21.131', 'ver_1.21.131')],
       [Markup.button.callback('🚀 1.21.130', 'ver_1.21.130')],
       [Markup.button.callback('✅ 1.21.124', 'ver_1.21.124')],
       [Markup.button.callback('1.21.123', 'ver_1.21.123')],
