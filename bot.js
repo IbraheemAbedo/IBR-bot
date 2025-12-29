@@ -377,6 +377,7 @@ bot.on('text', async (ctx) => {
           Markup.inlineKeyboard([
             [Markup.button.callback('▶️ تشغيل البوت', 'run_bot')],
             [Markup.button.callback('➕ إضافة بوت', 'add_bot')],
+            [Markup.button.callback('🔧 تشغيل ذكي', 'run_smart')],
             [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
             [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')],
             [Markup.button.url('تفاعل في قناة البوت والا يتم حظرك نهائيا🚫 ', 'https://t.me/+c7sbwOViyhNmYzAy')]
