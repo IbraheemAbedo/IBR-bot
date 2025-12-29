@@ -1,4 +1,3 @@
-
 const { Telegraf, Markup } = require('telegraf');
 const { createClient } = require('bedrock-protocol');
 const fs = require('fs');
@@ -510,6 +509,172 @@ bot.command('status', (ctx) => {
   
   ctx.reply(stats);
 });
+// عرض جميع المستخدمين
+bot.command('users', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  const userList = users.slice(0, 50).map((id, index) => 
+    `${index + 1}. ID: ${id}`
+  ).join('\n');
+  
+  ctx.reply(
+    `👥 المستخدمين (${users.length}):\n\n${userList}\n\n` +
+    `📊 أول 50 مستخدم من أصل ${users.length}`
+  );
+});
+
+// حذف مستخدم
+bot.command('remove', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  const args = ctx.message.text.split(' ');
+  if (args.length < 2) {
+    return ctx.reply('❌ استخدم: /remove [رقم المستخدم]');
+  }
+  
+  const userId = parseInt(args[1]);
+  if (isNaN(userId)) {
+    return ctx.reply('❌ رقم المستخدم يجب أن يكون رقماً');
+  }
+  
+  // حذف من المستخدمين
+  const userIndex = users.indexOf(userId);
+  if (userIndex !== -1) {
+    users.splice(userIndex, 1);
+  }
+  
+  // حذف سيرفره
+  if (servers[userId]) {
+    delete servers[userId];
+  }
+  
+  // حذف اتصالاته
+  Object.keys(clients).forEach(key => {
+    if (key.startsWith(userId + '_')) {
+      try {
+        clients[key].end();
+      } catch (err) {}
+      delete clients[key];
+    }
+  });
+  
+  saveUsers();
+  saveServers();
+  
+  ctx.reply(`✅ تم حذف المستخدم ${userId} وبياناته`);
+});
+
+// عرض السيرفرات المحفوظة
+bot.command('servers', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  let serverList = '';
+  let count = 0;
+  
+  for (const userId in servers) {
+    if (servers[userId].ip) {
+      count++;
+      serverList += `${count}. ${servers[userId].ip}:${servers[userId].port} (الإصدار: ${servers[userId].version || 'غير محدد'})\n`;
+      
+      if (count >= 20) {
+        serverList += '... والمزيد\n';
+        break;
+      }
+    }
+  }
+  
+  ctx.reply(
+    `🌐 السيرفرات المحفوظة (${Object.keys(servers).length}):\n\n${serverList || 'لا توجد سيرفرات'}\n\n` +
+    `📊 عرض أول 20 سيرفر`
+  );
+});
+
+
+
+
+// عرض السيرفرات المحفوظة
+bot.command('servers', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  let serverList = '';
+  let count = 0;
+  
+  for (const userId in servers) {
+    if (servers[userId].ip) {
+      count++;
+      serverList += `${count}. ${servers[userId].ip}:${servers[userId].port} (الإصدار: ${servers[userId].version || 'غير محدد'})\n`;
+      
+      if (count >= 20) {
+        serverList += '... والمزيد\n';
+        break;
+      }
+    }
+  }
+  
+  ctx.reply(
+    `🌐 السيرفرات المحفوظة (${Object.keys(servers).length}):\n\n${serverList || 'لا توجد سيرفرات'}\n\n` +
+    `📊 عرض أول 20 سيرفر`
+  );
+});
+
+
+
+// إعادة التشغيل
+bot.command('restart', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  ctx.reply('🔄 جاري إعادة التشغيل...');
+  
+  // إغلاق جميع الاتصالات
+  Object.keys(clients).forEach(key => {
+    try {
+      clients[key].end();
+    } catch (err) {}
+  });
+  
+  setTimeout(() => {
+    console.log('🔄 إعادة التشغيل عن بعد بواسطة المالك');
+    process.exit(0); // سيعيد Railway تشغيل البوت تلقائياً
+  }, 2000);
+});
+
+
+
+// نسخ احتياطي
+bot.command('backup', (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  try {
+    const backupData = {
+      users: users,
+      servers: servers,
+      timestamp: new Date().toISOString(),
+      count: {
+        users: users.length,
+        servers: Object.keys(servers).length
+      }
+    };
+    
+    const backupJson = JSON.stringify(backupData, null, 2);
+    
+    ctx.reply(
+      `💾 النسخ الاحتياطي:\n\n` +
+      `👥 المستخدمين: ${users.length}\n` +
+      `🌐 السيرفرات: ${Object.keys(servers).length}\n` +
+      `⏰ الوقت: ${new Date().toLocaleString()}\n\n` +
+      `📋 البيانات جاهزة للنسخ`
+    );
+    
+    // يمكن إرسالها كملق في الوضع العادي
+    // ctx.replyWithDocument({ source: Buffer.from(backupJson), filename: 'backup.json' });
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ في النسخ الاحتياطي: ${error.message}`);
+  }
+});
+
+
+
 
 // تشغيل البوت العادي
 bot.action('run_bot', async (ctx) => {
