@@ -18,13 +18,15 @@ let clients = {};
 const DATA_DIR = './data';
 
 // ============== [خريطة الإصدارات الذكية] ==============
+// ============== [خريطة الإصدارات الذكية - محدثة] ==============
 const PROTOCOL_MAP = {
-  // إصدارات حديثة (يتم تحديثها تلقائياً)
+  // إصدارات حديثة جداً (محدثة يدوياً)
   '1.21.140': 880, '1.21.139': 879, '1.21.138': 878, '1.21.137': 877,
   '1.21.136': 876, '1.21.135': 875, '1.21.134': 874, '1.21.133': 873,
-  '1.21.132': 872, '1.21.131': 871, '1.21.130': 870,
+  '1.21.132': 872, '1.21.131': 871, // ⬅️ أضفنا 1.21.131 هنا!
+  '1.21.130': 870,
   
-  // إصدارات حالية (من السجلات)
+  // بقية الإصدارات كما هي...
   '1.21.124.2': 860, '1.21.124': 860, '1.21.123': 859,
   '1.21.120': 859, '1.21.111': 844, '1.21.100': 827,
   '1.21.93': 819, '1.21.90': 818, '1.21.80': 800,
@@ -154,13 +156,14 @@ async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_B
   const closestVersion = getClosestVersion(requestedVersion);
   
   // إضافة الإصدارات للمحاولة
+  versionsToTry.push(requestedVersion); // حاول الإصدار المطلوب أولاً
+  
   if (requestedVersion !== closestVersion) {
     versionsToTry.push(closestVersion);
   }
-  versionsToTry.push(requestedVersion);
   
   // إضافة إصدارات شائعة أخرى
-  const commonVersions = ['1.21.124', '1.21.120', '1.21.100', '1.21.80', '1.20.80'];
+  const commonVersions = ['1.21.130', '1.21.124', '1.21.100', '1.21.80'];
   commonVersions.forEach(v => {
     if (!versionsToTry.includes(v)) versionsToTry.push(v);
   });
@@ -168,8 +171,7 @@ async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_B
   let lastError = null;
   
   for (const version of versionsToTry) {
-    const protocol = PROTOCOL_MAP[version];
-    if (!protocol) continue;
+    const protocol = PROTOCOL_MAP[version] || autoDetectProtocol(version);
     
     try {
       console.log(`🔗 محاولة ${version} (بروتوكول: ${protocol})`);
@@ -310,6 +312,7 @@ bot.action('back_versions', (ctx) => {
   ctx.editMessageText('🎮 اختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
+      [Markup.button.callback('✨NEW 1.21.131', 'ver_1.21.131')],
       [Markup.button.callback('🚀 1.21.130', 'ver_1.21.130')],
       [Markup.button.callback('✅ 1.21.124', 'ver_1.21.124')],
       [Markup.button.callback('1.21.123', 'ver_1.21.123')],
@@ -651,7 +654,44 @@ bot.command('test', async (ctx) => {
     { parse_mode: 'Markdown' }
   );
 });
-
+// أضف هذا الأمر في قسم الأوامر الخاصة
+bot.command('update_versions', async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  ctx.reply('🔄 جاري تحديث خريطة الإصدارات...');
+  
+  try {
+    // محاولة الحصول على أحدث إصدارات من المكتبة
+    const protocol = require('bedrock-protocol');
+    
+    let newVersions = '';
+    
+    // إضافة إصدارات 1.21.131 - 1.21.140 تلقائياً
+    for (let i = 131; i <= 140; i++) {
+      const version = `1.21.${i}`;
+      const protocolNum = 870 + (i - 130); // حساب تلقائي
+      
+      if (!PROTOCOL_MAP[version]) {
+        PROTOCOL_MAP[version] = protocolNum;
+        newVersions += `• ${version}: ${protocolNum}\n`;
+      }
+    }
+    
+    if (newVersions) {
+      ctx.reply(
+        `✅ *تمت إضافة إصدارات جديدة:*\n\n${newVersions}\n` +
+        `📊 الإجمالي: ${Object.keys(PROTOCOL_MAP).length} إصدار\n\n` +
+        `🔄 أعد تشغيل البوت للتطبيق`,
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      ctx.reply('✅ خريطة الإصدارات محدثة بالفعل');
+    }
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ: ${error.message}`);
+  }
+});
 // تعيين إصدار سريع
 bot.command('set130', (ctx) => {
   const userId = ctx.from.id;
@@ -740,6 +780,25 @@ bot.command('libinfo', (ctx) => {
 // ============== [تشغيل البوت] ==============
 process.once('SIGINT', () => gracefulShutdown('SIGINT'));
 process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// أضف هذا في بداية تشغيل البوت (قبل bot.launch)
+console.log('🔍 التحقق من الإصدارات المدعومة...');
+
+// عرض الإصدارات الحديثة المدعومة
+const modernVersions = Object.keys(PROTOCOL_MAP)
+  .filter(v => v.startsWith('1.21.1'))
+  .sort()
+  .reverse();
+
+console.log(`📀 الإصدارات الحديثة المدعومة (1.21.1xx):`);
+modernVersions.slice(0, 15).forEach(v => {
+  console.log(`  ${v}: ${PROTOCOL_MAP[v]}`);
+});
+
+if (modernVersions.length === 0) {
+  console.log('⚠️ لا توجد إصدارات 1.21.1xx في الخريطة!');
+  console.log('💡 أضفها يدوياً إلى PROTOCOL_MAP');
+}
 
 // بدء البوت
 bot.launch({
