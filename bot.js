@@ -3,10 +3,140 @@ const { createClient } = require('bedrock-protocol');
 const fs = require('fs');
 const path = require('path');
 
+// ============== [نظام قاعدة البيانات] ==============
+const sqlite3 = require('sqlite3').verbose();
+const { open } = require('sqlite');
+
+let db;
+
+// دالة لفتح قاعدة البيانات
+async function initDatabase() {
+  try {
+    db = await open({
+      filename: './data/users.db',
+      driver: sqlite3.Database
+    });
+    
+    // إنشاء جدول المستخدمين
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS bot_users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        join_date TEXT,
+        last_seen TEXT,
+        message_count INTEGER DEFAULT 1
+      )
+    `);
+    
+    // إنشاء جدول الإحصائيات
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS bot_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        new_users INTEGER,
+        total_users INTEGER
+      )
+    `);
+    
+    console.log('✅ قاعدة بيانات المستخدمين جاهزة');
+    return true;
+  } catch (error) {
+    console.log('❌ خطأ في إنشاء قاعدة البيانات:', error.message);
+    return false;
+  }
+}
+
+// دالة لحفظ المستخدم
+async function saveUserToDB(user) {
+  try {
+    if (!db) {
+      console.log('⚠️ قاعدة البيانات غير جاهزة');
+      return false;
+    }
+    
+    const now = new Date().toISOString();
+    
+    // تحقق إذا المستخدم موجود
+    const existing = await db.get(
+      'SELECT user_id FROM bot_users WHERE user_id = ?',
+      [user.id]
+    );
+    
+    if (existing) {
+      // تحديث المستخدم
+      await db.run(
+        `UPDATE bot_users SET 
+         username = ?, first_name = ?, last_name = ?,
+         last_seen = ?, message_count = message_count + 1
+         WHERE user_id = ?`,
+        [user.username || '', user.first_name || '', user.last_name || '', now, user.id]
+      );
+      return 'updated';
+    } else {
+      // إضافة مستخدم جديد
+      await db.run(
+        `INSERT INTO bot_users 
+         (user_id, username, first_name, last_name, join_date, last_seen, message_count)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        [user.id, user.username || '', user.first_name || '', user.last_name || '', now, now]
+      );
+      
+      // تحديث الإحصائيات اليومية
+      const today = new Date().toISOString().split('T')[0];
+      const stats = await db.get('SELECT * FROM bot_stats WHERE date = ?', [today]);
+      
+      if (stats) {
+        await db.run(
+          'UPDATE bot_stats SET new_users = new_users + 1, total_users = total_users + 1 WHERE date = ?',
+          [today]
+        );
+      } else {
+        const totalUsers = await db.get('SELECT COUNT(*) as count FROM bot_users');
+        await db.run(
+          'INSERT INTO bot_stats (date, new_users, total_users) VALUES (?, 1, ?)',
+          [today, totalUsers.count]
+        );
+      }
+      
+      return 'added';
+    }
+  } catch (error) {
+    console.log('❌ خطأ في حفظ المستخدم:', error.message);
+    return 'error';
+  }
+}
+
+// دالة لجلب عدد المستخدمين
+async function getTotalUsers() {
+  try {
+    if (!db) return 0;
+    const result = await db.get('SELECT COUNT(*) as count FROM bot_users');
+    return result.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// دالة لجلب آخر المستخدمين
+async function getRecentUsers(limit = 20) {
+  try {
+    if (!db) return [];
+    const users = await db.all(
+      'SELECT * FROM bot_users ORDER BY join_date DESC LIMIT ?',
+      [limit]
+    );
+    return users;
+  } catch {
+    return [];
+  }
+}
+
 // ============== [الإعدادات] ==============
-const REQUIRED_CHANNEL = -1003499194538; // قناة الاشتراك الإجباري
-const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ'; // ⚠️ غيّر هذا
-const ownerId = 1421302016; // ⚠️ غيّر هذا
+const REQUIRED_CHANNEL = -1003499194538;
+const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';
+const ownerId = 1421302016;
 
 const bot = new Telegraf(botToken);
 
@@ -17,15 +147,14 @@ let clients = {};
 const DATA_DIR = './data';
 
 // ============== [خريطة الإصدارات الذكية] ==============
-// ============== [خريطة الإصدارات الذكية - محدثة] ==============
 const PROTOCOL_MAP = {
-  // إصدارات حديثة جداً (محدثة يدوياً)
+  // إصدارات حديثة جداً
   '1.21.140': 880, '1.21.139': 879, '1.21.138': 878, '1.21.137': 877,
   '1.21.136': 876, '1.21.135': 875, '1.21.134': 874, '1.21.133': 873,
-  '1.21.132': 872, '1.21.131': 871, // ⬅️ أضفنا 1.21.131 هنا!
+  '1.21.132': 872, '1.21.131': 871,
   '1.21.130': 870,
   
-  // بقية الإصدارات كما هي...
+  // بقية الإصدارات
   '1.21.124.2': 860, '1.21.124': 860, '1.21.123': 859,
   '1.21.120': 859, '1.21.111': 844, '1.21.100': 827,
   '1.21.93': 819, '1.21.90': 818, '1.21.80': 800,
@@ -49,17 +178,14 @@ function getClosestVersion(requestedVersion) {
     return requestedVersion;
   }
   
-  // تحليل الإصدار المطلوب
   const parts = requestedVersion.split('.').map(Number);
   const [major, minor, patch] = parts;
   
-  // البحث عن إصدار بنفس المستوى الرئيسي
   for (let p = patch; p >= 0; p--) {
     const testVersion = `${major}.${minor}.${p}`;
     if (PROTOCOL_MAP[testVersion]) return testVersion;
   }
   
-  // البحث في الإصدارات الأقدم
   for (let m = minor - 1; m >= 0; m--) {
     for (let p = 200; p >= 0; p--) {
       const testVersion = `${major}.${m}.${p}`;
@@ -67,7 +193,7 @@ function getClosestVersion(requestedVersion) {
     }
   }
   
-  return '1.21.124'; // افتراضي
+  return '1.21.124';
 }
 
 // ============== [وظائف الملفات] ==============
@@ -125,7 +251,6 @@ async function gracefulShutdown(signal) {
   
   console.log(`\n🛑 استقبال إشارة ${signal}...`);
   
-  // إيقاف اتصالات ماينكرافت
   console.log('🛑 إيقاف اتصالات ماينكرافت...');
   Object.keys(clients).forEach(key => {
     try {
@@ -134,10 +259,8 @@ async function gracefulShutdown(signal) {
     } catch (err) {}
   });
   
-  // إعطاء وقت للحفظ
   await new Promise(resolve => setTimeout(resolve, 2000));
   
-  // إيقاف البوت
   console.log('🛑 إيقاف بوت تلغرام...');
   try {
     await bot.stop(signal);
@@ -150,21 +273,18 @@ async function gracefulShutdown(signal) {
 }
 
 // ============== [الاتصال الذكي] ==============
-// ============== [إصلاح دالة smartConnect لمنع التوقف] ==============
 async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_Bot') {
   try {
     const versionsToTry = [];
     const closestVersion = getClosestVersion(requestedVersion);
     
-    // إضافة الإصدارات للمحاولة
-    versionsToTry.push(requestedVersion); // حاول الإصدار المطلوب أولاً
+    versionsToTry.push(requestedVersion);
     
     if (requestedVersion !== closestVersion) {
       versionsToTry.push(closestVersion);
     }
     
-    // إضافة إصدارات شائعة أخرى
-    const commonVersions = ['1.21.124', '1.21.100', '1.21.80']; // ⚠️ أزلت 1.21.130
+    const commonVersions = ['1.21.124', '1.21.100', '1.21.80'];
     commonVersions.forEach(v => {
       if (!versionsToTry.includes(v) && PROTOCOL_MAP[v]) {
         versionsToTry.push(v);
@@ -188,13 +308,12 @@ async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_B
           username: botName,
           version: version,
           offline: true,
-          connectTimeout: 10000, // ⏱️ قللت المهلة
+          connectTimeout: 10000,
           protocolVersion: protocol,
-          skipPing: false, // ⚠️ غيرت من true إلى false
+          skipPing: false,
           raknetBackoff: true
         });
         
-        // ⚠️ إضافة معالج للأخطاء فوراً لمنع crash
         const connectionResult = await new Promise((resolve) => {
           const timeout = setTimeout(() => {
             client.end().catch(() => {});
@@ -249,7 +368,6 @@ async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_B
     };
     
   } catch (error) {
-    // ⚠️ هذا يمنع التوقف الكامل
     console.error(`🔥 خطأ محتوى في smartConnect: ${error.message}`);
     return {
       success: false,
@@ -258,6 +376,7 @@ async function smartConnect(ip, port, requestedVersion, userId, botName = 'IBR_B
     };
   }
 }
+
 // ============== [تحميل البيانات] ==============
 loadData();
 
@@ -280,6 +399,14 @@ bot.start(async (ctx) => {
   const user = ctx.from;
   const userId = user.id;
   
+  // حفظ المستخدم في قاعدة البيانات SQLite
+  const dbResult = await saveUserToDB(user);
+  
+  if (dbResult === 'added') {
+    const totalUsers = await getTotalUsers();
+    console.log(`👤 مستخدم جديد: ${user.first_name} (${user.id}) - الإجمالي: ${totalUsers}`);
+  }
+  
   if (!users.includes(userId)) {
     users.push(userId);
     saveUsers();
@@ -299,7 +426,6 @@ bot.start(async (ctx) => {
   ctx.reply('🎮 أهلاً بك في بوت Minecraft by IBR!\n\nاختر إصدار اللعبة:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
-
       [Markup.button.callback('✨NEW 1.21.131', 'ver_1.21.131')],
       [Markup.button.callback('🚀 1.21.130', 'ver_1.21.130')],
       [Markup.button.callback('✅ 1.21.124', 'ver_1.21.124')],
@@ -409,7 +535,6 @@ bot.on('text', async (ctx) => {
             [Markup.button.callback('🛑 إيقاف البوت', 'stop_bot')],
             [Markup.button.callback('🗑️ حذف السيرفر', 'del_server')],
             [Markup.button.url('تفاعل في قناة البوت والا يتم حظرك نهائيا🚫 ', 'https://t.me/+c7sbwOViyhNmYzAy')]
-            
           ])
         );
       } else {
@@ -420,7 +545,6 @@ bot.on('text', async (ctx) => {
 });
 
 // تشغيل البوت الذكي
-// تشغيل البوت الذكي (آمن)
 bot.action('run_smart', async (ctx) => {
   const userId = ctx.from.id;
   
@@ -432,11 +556,9 @@ bot.action('run_smart', async (ctx) => {
   
   ctx.answerCbQuery('🤖 جاري التشغيل الذكي...');
   
-  // أرسل رسالة منفصلة لمنع التوقف
   ctx.reply(`🔍 بدء الاتصال الذكي:\n${ip}:${port}\nالإصدار المطلوب: ${version}`)
-    .catch(() => {}); // ⚠️ تجاهل الخطأ
+    .catch(() => {});
   
-  // ⚠️ تشغيل في الخلفية بدون انتظار
   setTimeout(async () => {
     try {
       const result = await smartConnect(ip, port, version, userId);
@@ -445,7 +567,6 @@ bot.action('run_smart', async (ctx) => {
         const clientKey = `${userId}_main`;
         clients[clientKey] = result.client;
         
-        // ⚠️ استخدم catch لمنع التوقف
         ctx.reply(result.message).catch(() => {});
         
         result.client.on('join', () => {
@@ -468,7 +589,6 @@ bot.action('run_smart', async (ctx) => {
         });
         
       } else {
-        // ⚠️ أرسل رسالة الخطأ بدون توقف
         ctx.reply(
           `❌ فشل الاتصال\n\n` +
           `خطأ: ${result.error}\n\n` +
@@ -480,12 +600,11 @@ bot.action('run_smart', async (ctx) => {
       }
       
     } catch (error) {
-      // ⚠️ حتى لو حدث خطأ، لا توقف البوت
       console.error('🔥 خطأ محتوى في run_smart:', error.message);
-      // لا تفعل شيئاً - البوت يستمر بالعمل
     }
   }, 100);
 });
+
 // ============== [نظام حماية من التوقف] ==============
 process.on('uncaughtException', (error) => {
   console.error(`🚨 خطأ غير متوقع (محتوى): ${error.message}`);
@@ -496,6 +615,248 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('🚨 وعد مرفوض غير معالج (محتوى):', reason);
 });
 
+// ============== [أوامر الإدارة الجديدة] ==============
+
+// لوحة التحكم الإدارية
+bot.command('admin', async (ctx) => {
+  if (ctx.from.id !== ownerId) {
+    return ctx.reply('⛔ ليس لديك صلاحية.');
+  }
+  
+  try {
+    const totalUsers = await getTotalUsers();
+    const recentUsers = await getRecentUsers(10);
+    
+    let message = `📊 *لوحة التحكم الإدارية*\n\n`;
+    message += `👥 *المستخدمين الإجماليين:* ${totalUsers}\n`;
+    message += `📅 *آخر 10 مستخدمين:*\n\n`;
+    
+    if (recentUsers.length > 0) {
+      recentUsers.forEach((user, index) => {
+        const date = new Date(user.join_date).toLocaleDateString('ar-SA');
+        message += `${index + 1}. ${user.first_name}`;
+        if (user.username) message += ` (@${user.username})`;
+        message += `\n   🆔: ${user.user_id} | 📅: ${date}\n\n`;
+      });
+    } else {
+      message += `📭 لا يوجد مستخدمين مسجلين بعد.\n`;
+    }
+    
+    message += `\n📊 *أوامر التحكم:*\n`;
+    message += `/stats_db - إحصائيات مفصلة\n`;
+    message += `/export - تصدير البيانات\n`;
+    message += `/find [آيدي] - البحث عن مستخدم\n`;
+    message += `/users_db - عرض جميع المستخدمين\n`;
+    message += `/servers - السيرفرات المحفوظة`;
+    
+    ctx.reply(message, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ: ${error.message}`);
+  }
+});
+
+// إحصائيات قاعدة البيانات
+bot.command('stats_db', async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  try {
+    const totalUsers = await getTotalUsers();
+    const today = new Date().toISOString().split('T')[0];
+    
+    const todayStats = await db.get(
+      'SELECT new_users FROM bot_stats WHERE date = ?',
+      [today]
+    );
+    
+    const newToday = todayStats ? todayStats.new_users : 0;
+    
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const activeUsers = await db.get(
+      'SELECT COUNT(*) as count FROM bot_users WHERE last_seen > ?',
+      [weekAgo]
+    );
+    
+    const message = `
+📊 *إحصائيات قاعدة البيانات:*
+
+👥 المستخدمين الإجماليين: ${totalUsers}
+🆕 مستخدمين جدد اليوم: ${newToday}
+🎯 مستخدمين نشطين (أسبوع): ${activeUsers.count || 0}
+💾 التخزين: SQLite (data/users.db)
+
+📌 *الأوامر المتاحة:*
+• /admin - لوحة التحكم
+• /export - تصدير البيانات
+• /users_db - عرض المستخدمين
+• /find [آيدي] - البحث عن مستخدم
+    `;
+    
+    ctx.reply(message, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ: ${error.message}`);
+  }
+});
+
+// تصدير البيانات
+bot.command('export', async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  try {
+    const users = await getRecentUsers(1000);
+    
+    if (users.length === 0) {
+      return ctx.reply('📭 لا يوجد بيانات للتصدير.');
+    }
+    
+    let csv = 'ID,Username,First Name,Last Name,Join Date,Last Seen,Messages\n';
+    
+    users.forEach(user => {
+      csv += `${user.user_id},${user.username || ''},${user.first_name || ''},${user.last_name || ''},${user.join_date},${user.last_seen},${user.message_count}\n`;
+    });
+    
+    const filename = `users_${Date.now()}.csv`;
+    fs.writeFileSync(filename, csv);
+    
+    await ctx.replyWithDocument({
+      source: fs.createReadStream(filename),
+      filename: filename
+    }, {
+      caption: `📁 تم تصدير ${users.length} مستخدم`
+    });
+    
+    fs.unlinkSync(filename);
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ في التصدير: ${error.message}`);
+  }
+});
+
+// البحث عن مستخدم
+bot.command('find', async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  const args = ctx.message.text.split(' ');
+  if (args.length < 2) {
+    return ctx.reply('❌ استخدم: /find [آيدي أو اسم]');
+  }
+  
+  const searchTerm = args[1];
+  
+  try {
+    let user;
+    
+    if (!isNaN(searchTerm)) {
+      user = await db.get(
+        'SELECT * FROM bot_users WHERE user_id = ?',
+        [parseInt(searchTerm)]
+      );
+    } else {
+      user = await db.get(
+        'SELECT * FROM bot_users WHERE username LIKE ? OR first_name LIKE ?',
+        [`%${searchTerm}%`, `%${searchTerm}%`]
+      );
+    }
+    
+    if (user) {
+      const joinDate = new Date(user.join_date).toLocaleString('ar-SA');
+      const lastSeen = new Date(user.last_seen).toLocaleString('ar-SA');
+      
+      const message = `
+✅ *تم العثور على المستخدم:*
+
+👤 الاسم: ${user.first_name} ${user.last_name || ''}
+📧 اليوزر: @${user.username || 'لا يوجد'}
+🆔 الآيدي: ${user.user_id}
+📅 تاريخ الانضمام: ${joinDate}
+🕒 آخر ظهور: ${lastSeen}
+💬 عدد الرسائل: ${user.message_count}
+      `;
+      
+      ctx.reply(message, { parse_mode: 'Markdown' });
+    } else {
+      ctx.reply('❌ لم يتم العثور على المستخدم.');
+    }
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ في البحث: ${error.message}`);
+  }
+});
+
+// عرض جميع المستخدمين من قاعدة البيانات
+bot.command('users_db', async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  const args = ctx.message.text.split(' ');
+  const page = args[1] ? parseInt(args[1]) : 1;
+  const limit = 20;
+  const offset = (page - 1) * limit;
+  
+  try {
+    const users = await db.all(
+      'SELECT * FROM bot_users ORDER BY join_date DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+    
+    const totalUsers = await getTotalUsers();
+    const totalPages = Math.ceil(totalUsers / limit);
+    
+    if (users.length === 0) {
+      return ctx.reply('📭 لا يوجد مستخدمين.');
+    }
+    
+    let message = `👥 *المستخدمين* (الصفحة ${page}/${totalPages})\n\n`;
+    
+    users.forEach((user, index) => {
+      const num = offset + index + 1;
+      const date = new Date(user.join_date).toLocaleDateString('ar-SA');
+      
+      message += `${num}. ${user.first_name}`;
+      if (user.username) message += ` (@${user.username})`;
+      message += `\n   🆔: ${user.user_id} | 📅: ${date}\n\n`;
+    });
+    
+    message += `📊 الإجمالي: ${totalUsers} مستخدم\n`;
+    
+    const keyboard = [];
+    
+    if (page > 1) {
+      keyboard.push([Markup.button.callback('◀️ الصفحة السابقة', `page_${page - 1}`)]);
+    }
+    
+    if (page < totalPages) {
+      keyboard.push([Markup.button.callback('الصفحة التالية ▶️', `page_${page + 1}`)]);
+    }
+    
+    if (keyboard.length > 0) {
+      ctx.reply(message, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(keyboard)
+      });
+    } else {
+      ctx.reply(message, { parse_mode: 'Markdown' });
+    }
+    
+  } catch (error) {
+    ctx.reply(`❌ خطأ: ${error.message}`);
+  }
+});
+
+// معالجة أزرار الصفحات
+bot.action(/page_(\d+)/, async (ctx) => {
+  if (ctx.from.id !== ownerId) return;
+  
+  const page = parseInt(ctx.match[1]);
+  ctx.answerCbQuery();
+  
+  await ctx.deleteMessage();
+  await bot.telegram.sendMessage(ctx.from.id, `/users_db ${page}`);
+});
+
+// ============== [أوامر خاصة أخرى] ==============
+// (الأوامر القديمة تبقى كما هي مع إضافة أمر /admin أعلاه)
+
 // أمر مراقبة الحالة
 bot.command('status', (ctx) => {
   if (ctx.from.id !== ownerId) return;
@@ -504,12 +865,12 @@ bot.command('status', (ctx) => {
     `👥 المستخدمين: ${users.length}\n` +
     `🌐 السيرفرات: ${Object.keys(servers).length}\n` +
     `🤖 اتصالات: ${Object.keys(clients).length}\n` +
-    `🔄 معالجة: ${isProcessing ? 'نعم' : 'لا'}\n` +
     `✅ الحالة: نشط`;
   
   ctx.reply(stats);
 });
-// عرض جميع المستخدمين
+
+// عرض جميع المستخدمين (من JSON القديم)
 bot.command('users', (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
@@ -537,18 +898,15 @@ bot.command('remove', (ctx) => {
     return ctx.reply('❌ رقم المستخدم يجب أن يكون رقماً');
   }
   
-  // حذف من المستخدمين
   const userIndex = users.indexOf(userId);
   if (userIndex !== -1) {
     users.splice(userIndex, 1);
   }
   
-  // حذف سيرفره
   if (servers[userId]) {
     delete servers[userId];
   }
   
-  // حذف اتصالاته
   Object.keys(clients).forEach(key => {
     if (key.startsWith(userId + '_')) {
       try {
@@ -589,43 +947,12 @@ bot.command('servers', (ctx) => {
   );
 });
 
-
-
-
-// عرض السيرفرات المحفوظة
-bot.command('servers', (ctx) => {
-  if (ctx.from.id !== ownerId) return;
-  
-  let serverList = '';
-  let count = 0;
-  
-  for (const userId in servers) {
-    if (servers[userId].ip) {
-      count++;
-      serverList += `${count}. ${servers[userId].ip}:${servers[userId].port} (الإصدار: ${servers[userId].version || 'غير محدد'})\n`;
-      
-      if (count >= 20) {
-        serverList += '... والمزيد\n';
-        break;
-      }
-    }
-  }
-  
-  ctx.reply(
-    `🌐 السيرفرات المحفوظة (${Object.keys(servers).length}):\n\n${serverList || 'لا توجد سيرفرات'}\n\n` +
-    `📊 عرض أول 20 سيرفر`
-  );
-});
-
-
-
 // إعادة التشغيل
 bot.command('restart', (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
   ctx.reply('🔄 جاري إعادة التشغيل...');
   
-  // إغلاق جميع الاتصالات
   Object.keys(clients).forEach(key => {
     try {
       clients[key].end();
@@ -634,11 +961,9 @@ bot.command('restart', (ctx) => {
   
   setTimeout(() => {
     console.log('🔄 إعادة التشغيل عن بعد بواسطة المالك');
-    process.exit(0); // سيعيد Railway تشغيل البوت تلقائياً
+    process.exit(0);
   }, 2000);
 });
-
-
 
 // نسخ احتياطي
 bot.command('backup', (ctx) => {
@@ -665,16 +990,10 @@ bot.command('backup', (ctx) => {
       `📋 البيانات جاهزة للنسخ`
     );
     
-    // يمكن إرسالها كملق في الوضع العادي
-    // ctx.replyWithDocument({ source: Buffer.from(backupJson), filename: 'backup.json' });
-    
   } catch (error) {
     ctx.reply(`❌ خطأ في النسخ الاحتياطي: ${error.message}`);
   }
 });
-
-
-
 
 // تشغيل البوت العادي
 bot.action('run_bot', async (ctx) => {
@@ -707,7 +1026,6 @@ bot.action('run_bot', async (ctx) => {
     
     client.on('join', () => {
       bot.telegram.sendMessage(userId, '🔥 دخل البوت بنجاح!').catch(() => {});
-      
     });
     
     client.on('disconnect', (reason) => {
@@ -733,24 +1051,7 @@ bot.action('run_bot', async (ctx) => {
     ctx.reply(`❌ خطأ: ${error.message}`);
   }
 });
-// ============== [دالة آمنة للمعالجة التلقائية] ==============
-let isProcessing = false;
 
-async function safeAsyncOperation(operation, errorMessage = 'حدث خطأ') {
-  if (isProcessing) {
-    return { success: false, error: 'جاري معالجة طلب آخر' };
-  }
-  
-  isProcessing = true;
-  try {
-    return await operation();
-  } catch (error) {
-    console.error(`🚨 خطأ محتوى: ${error.message}`);
-    return { success: false, error: errorMessage };
-  } finally {
-    isProcessing = false;
-  }
-}
 // إضافة بوت إضافي
 bot.action('add_bot', async (ctx) => {
   const userId = ctx.from.id;
@@ -832,8 +1133,6 @@ bot.action('del_server', (ctx) => {
   }
 });
 
-// ============== [أوامر خاصة] ==============
-
 // اختبار الاتصال
 bot.command('test', async (ctx) => {
   const userId = ctx.from.id;
@@ -898,22 +1197,19 @@ bot.command('test', async (ctx) => {
     { parse_mode: 'Markdown' }
   );
 });
-// أضف هذا الأمر في قسم الأوامر الخاصة
+
+// تحديث الإصدارات
 bot.command('update_versions', async (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
   ctx.reply('🔄 جاري تحديث خريطة الإصدارات...');
   
   try {
-    // محاولة الحصول على أحدث إصدارات من المكتبة
-    const protocol = require('bedrock-protocol');
-    
     let newVersions = '';
     
-    // إضافة إصدارات 1.21.131 - 1.21.140 تلقائياً
     for (let i = 131; i <= 140; i++) {
       const version = `1.21.${i}`;
-      const protocolNum = 870 + (i - 130); // حساب تلقائي
+      const protocolNum = 870 + (i - 130);
       
       if (!PROTOCOL_MAP[version]) {
         PROTOCOL_MAP[version] = protocolNum;
@@ -936,6 +1232,7 @@ bot.command('update_versions', async (ctx) => {
     ctx.reply(`❌ خطأ: ${error.message}`);
   }
 });
+
 // تعيين إصدار سريع
 bot.command('set130', (ctx) => {
   const userId = ctx.from.id;
@@ -969,7 +1266,7 @@ bot.command('set124', (ctx) => {
   ctx.reply('✅ تم تعيين الإصدار إلى 1.21.124 (مضمون)\nاضغط "▶️ تشغيل البوت"');
 });
 
-// الإحصائيات (للمالك فقط)
+// الإحصائيات
 bot.command('stats', (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
@@ -977,12 +1274,12 @@ bot.command('stats', (ctx) => {
     `👥 المستخدمين: ${users.length}\n` +
     `🌐 السيرفرات النشطة: ${Object.keys(servers).length}\n` +
     `🤖 البوتات النشطة: ${Object.keys(clients).length}\n` +
-    `📀 أحدث إصدار: 1.21.130`;
+    `📀 أحدث إصدار: 1.21.131`;
   
   ctx.reply(stats, { parse_mode: 'Markdown' });
 });
 
-// البث (للمالك فقط)
+// البث
 bot.command('broadcast', async (ctx) => {
   if (ctx.from.id !== ownerId) return;
   
@@ -1025,32 +1322,18 @@ bot.command('libinfo', (ctx) => {
 process.once('SIGINT', () => gracefulShutdown('SIGINT'));
 process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-// أضف هذا في بداية تشغيل البوت (قبل bot.launch)
-console.log('🔍 التحقق من الإصدارات المدعومة...');
-
-// عرض الإصدارات الحديثة المدعومة
-const modernVersions = Object.keys(PROTOCOL_MAP)
-  .filter(v => v.startsWith('1.21.1'))
-  .sort()
-  .reverse();
-
-console.log(`📀 الإصدارات الحديثة المدعومة (1.21.1xx):`);
-modernVersions.slice(0, 15).forEach(v => {
-  console.log(`  ${v}: ${PROTOCOL_MAP[v]}`);
-});
-
-if (modernVersions.length === 0) {
-  console.log('⚠️ لا توجد إصدارات 1.21.1xx في الخريطة!');
-  console.log('💡 أضفها يدوياً إلى PROTOCOL_MAP');
-}
-
 // بدء البوت
 bot.launch({
   dropPendingUpdates: true,
   allowedUpdates: ['message', 'callback_query']
 })
-.then(() => {
+.then(async () => {
   console.log('🚀 البوت يعمل الآن!');
+  
+  // تهيئة قاعدة البيانات
+  await initDatabase();
+  
+  console.log('📊 نظام قاعدة البيانات مفعل');
   console.log('📀 الإصدارات المدعومة:', Object.keys(PROTOCOL_MAP).length);
   
   const latest = Object.keys(PROTOCOL_MAP)
@@ -1059,6 +1342,7 @@ bot.launch({
     .reverse()[0];
   
   console.log(`🎯 أحدث إصدار: ${latest} (بروتوكول: ${PROTOCOL_MAP[latest]})`);
+  console.log(`👑 المالك: ${ownerId}`);
 })
 .catch((err) => {
   console.error('❌ خطأ في تشغيل البوت:', err.message);
