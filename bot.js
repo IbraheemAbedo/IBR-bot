@@ -5,7 +5,7 @@ const path = require('path');
 
 // ============== [الإعدادات] ==============
 const REQUIRED_CHANNEL = -1003499194538; // قناة الاشتراك الإجباري
-const botToken = '8270739982:AAFbleW6nlVqyxJMFxu_8c_ni34mzNIev_w';// ⚠️ غيّر هذا
+const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ';// ⚠️ غيّر هذا
 const ownerId = 1421302016; // ⚠️ غيّر هذا
 
 const bot = new Telegraf(botToken);
