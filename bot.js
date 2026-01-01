@@ -5,7 +5,7 @@ const path = require('path');
 
 // ============== [الإعدادات] ==============
 const REQUIRED_CHANNEL = https://t.me/IBR_Chaneel; // قناة الاشتراك الإجباري
-const botToken = '8198997283:AAHL_yWKazZf3Aa8OluwgjXV2goxtpwNPPQ'; // ⚠️ غيّر هذا
+const botToken = -1003499194538; // ⚠️ غيّر هذا
 const ownerId = 1421302016; // ⚠️ غيّر هذا
 
 const bot = new Telegraf(botToken);
